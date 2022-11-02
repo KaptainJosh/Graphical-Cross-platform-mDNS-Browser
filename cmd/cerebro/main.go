@@ -1,13 +1,12 @@
 package main
 
 import (
-	"io"
+	"github.com/KaptainJosh/Project-Cerebro/cmd/cerebro/cli"
 	"os"
 	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/hashicorp/mdns"
-	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 var CLI struct {
@@ -21,14 +20,14 @@ var CLI struct {
 }
 
 func main() {
-	cli := kong.Parse(&CLI)
-	switch cli.Command() {
+	ctx := kong.Parse(&CLI)
+	switch ctx.Command() {
 	case "list":
 		// create collection channel
 		entriesCh := make(chan *mdns.ServiceEntry, 4)
 		done := make(chan struct{})
 		// start collector
-		go collect(entriesCh, os.Stdout, done)
+		go cli.Collect(entriesCh, os.Stdout, !CLI.List.DisableIPv6, done)
 
 		// do lookup
 		if err := lookup(entriesCh); err != nil {
@@ -37,7 +36,7 @@ func main() {
 
 		<-done
 	default:
-		panic(cli.Command())
+		panic(ctx.Command())
 	}
 }
 
@@ -57,28 +56,4 @@ func lookup(entriesCh chan *mdns.ServiceEntry) error {
 
 	// Start the lookup
 	return mdns.Query(p)
-}
-
-func collect(entriesCh chan *mdns.ServiceEntry, w io.Writer, done chan struct{}) {
-	t := table.NewWriter()
-	t.SetOutputMirror(w)
-	t.AppendHeader(table.Row{
-		"Name",
-		"Host",
-		"AddrV4",
-		"AddrV6",
-		"Port",
-	})
-	for entry := range entriesCh {
-		t.AppendRow(table.Row{
-			entry.Name,
-			entry.Host,
-			entry.AddrV4,
-			entry.AddrV6,
-			entry.Port,
-		})
-	}
-	t.Render()
-
-	done <- struct{}{}
 }
